@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body class="login-body">
+
+<div class="card login-card">
+
+<h2>Gestor Académico</h2>
+
+<form method="post">
+
+<input name="email" placeholder="Email" required>
+<input type="password" name="password" placeholder="Password" required>
+
+{% if error %}
+<div style="color:#f87171;margin-top:10px;">
+{{error}}
+</div>
+{% endif %}
+
+<button>Ingresar</button>
+
+</form>
+
+<br>
+
+<a href="/register">Crear cuenta profesor</a>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<title>Panel Administrador</title>
+</head>
+
+<body>
+
+<div class="topbar">
+
+    <div>Panel Administrador</div>
+
+    <div class="user-menu">
+
+        <div class="user-btn">
+            {{ session['nombre'] }} ▼
+        </div>
+
+        <div class="dropdown">
+            <a href="/perfil">Editar perfil</a>
+            <a href="/admin">Panel</a>
+            <a href="/usuarios">Usuarios</a>
+            <a href="/logout">Salir</a>
+        </div>
+
+    </div>
+
+</div>
+
+<div class="container">
+
+<h2>Usuarios pendientes</h2>
+
+<div class="grid">
+
+{% for u in usuarios %}
+{% if u['estado'] == 'pendiente' %}
+<div class="card">
+
+    <div class="titulo">{{ u['nombre'] }}</div>
+    <div class="materia">{{ u['email'] }}</div>
+
+    <div class="fecha">
+        Estado: {{ u['estado'] }}
+    </div>
+
+    <br>
+
+    <div style="display:flex; gap:10px;">
+
+        <a href="/aprobar/{{ u['id'] }}">
+            <button style="background:green;">Aprobar</button>
+        </a>
+
+        <a href="/rechazar/{{ u['id'] }}">
+            <button style="background:#dc2626;">Rechazar</button>
+        </a>
+
+    </div>
+
+</div>
+{% endif %}
+{% endfor %}
+
+</div>
+
+
+<h2 style="margin-top:40px;">Archivos cargados</h2>
+
+<input id="buscar" placeholder="Buscar por profesor, materia o archivo...">
+
+<br><br>
+
+<div id="contenedor" class="grid">
+
+{% for a in archivos %}
+<div class="card archivo item">
+
+    <div class="titulo">
+        {{ a['materia'] }}
+    </div>
+
+    <div class="materia">
+        Profesor: {{ a['profesor_nombre'] }}
+    </div>
+
+    <div class="materia">
+        Carrera: {{ a['carrera'] }}
+    </div>
+
+    {% if a['observaciones'] %}
+    <div class="materia">
+        Obs: {{ a['observaciones'] }}
+    </div>
+    {% endif %}
+
+    <div class="fecha">
+        Última modificación: {{ a['fecha'] }}
+    </div>
+
+    {% if a['fecha_creacion'] %}
+    <div class="fecha">
+        Creado: {{ a['fecha_creacion'] }}
+    </div>
+    {% endif %}
+
+    {% if a['fecha_edicion'] %}
+    <div class="fecha">
+        Editado: {{ a['fecha_edicion'] }}
+    </div>
+    {% endif %}
+
+    {% if a['creado_por'] %}
+    <div class="fecha">
+        Creado por: {{ a['creado_por'] }}
+    </div>
+    {% endif %}
+
+    {% if a['editado_por'] %}
+    <div class="fecha">
+        Editado por: {{ a['editado_por'] }}
+    </div>
+    {% endif %}
+
+    <iframe 
+        src="/uploads/{{ a['archivo'] }}" 
+        width="100%" 
+        height="250">
+    </iframe>
+
+    <br>
+
+    <div style="display:flex; gap:10px;">
+
+        <a href="/editar_pdf/{{ a['id'] }}">
+            <button style="background:#2563eb;">Editar</button>
+        </a>
+
+        <a href="/eliminar_pdf_admin/{{ a['id'] }}">
+            <button style="background:#dc2626;">Eliminar</button>
+        </a>
+
+    </div>
+
+</div>
+{% endfor %}
+
+</div>
+
+</div>
+
+<script>
+document.getElementById("buscar").addEventListener("keyup", function () {
+
+    let texto = this.value.toLowerCase()
+    let items = document.querySelectorAll(".item")
+
+    items.forEach(i => {
+        i.style.display = i.innerText.toLowerCase().includes(texto)
+            ? ""
+            : "none"
+    })
+
+})
+</script>
+
+</body>
+</html>

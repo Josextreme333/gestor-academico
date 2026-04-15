@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<title>Registro Profesor</title>
+</head>
+
+<body class="login-body">
+
+<div class="card login-card">
+
+<h2>Registro Profesor</h2>
+
+<form method="post">
+
+<input name="nombre" placeholder="Nombre completo" required>
+
+<input 
+name="email" 
+type="email"
+placeholder="Email"
+required
+>
+
+<input 
+type="password" 
+name="password" 
+placeholder="Contraseña"
+required
+>
+
+{% if error %}
+<div style="color:#f87171;margin-top:10px;">
+{{ error }}
+</div>
+{% endif %}
+
+<button>Registrarse</button>
+
+</form>
+
+<br>
+
+<a href="/">
+← Volver al login
+</a>
+
+</div>
+
+</body>
+</html>

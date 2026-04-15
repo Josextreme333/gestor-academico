@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<title>Editar PDF</title>
+</head>
+
+<body>
+
+<div class="topbar">
+    <div>Editar Programa</div>
+
+    <div class="user-menu">
+        <div class="user-btn">
+            {{ session['nombre'] }} ▼
+        </div>
+
+        <div class="dropdown">
+            <a href="javascript:history.back()">Volver</a>
+            <a href="/logout">Salir</a>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+
+<div class="card" style="max-width:600px;">
+
+<h3>Editar datos</h3>
+
+<form method="post" enctype="multipart/form-data">
+
+    <label>Carrera</label>
+    <input 
+        name="carrera" 
+        value="{{ pdf['carrera'] }}" 
+        required
+    >
+
+    <label>Materia</label>
+    <input 
+        name="materia" 
+        value="{{ pdf['materia'] }}" 
+        required
+    >
+
+    <label>Observaciones</label>
+    <input 
+        name="observaciones" 
+        value="{{ pdf['observaciones'] }}"
+    >
+
+    <br><br>
+
+    <label>PDF actual</label>
+
+    <iframe 
+        src="/uploads/{{ pdf['archivo'] }}" 
+        width="100%" 
+        height="300">
+    </iframe>
+
+    <br>
+
+    <label>Reemplazar PDF (opcional)</label>
+    <input type="file" name="pdf">
+
+    <br><br>
+
+    <button>Guardar cambios</button>
+
+</form>
+
+</div>
+
+</div>
+
+</body>
+</html>

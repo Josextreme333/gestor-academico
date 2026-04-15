@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<title>Perfil</title>
+</head>
+
+<body>
+
+<div class="topbar">
+
+<div>Mi Perfil</div>
+
+<div class="user-menu">
+
+    <div class="user-btn">
+        {{ session['nombre'] }} ▼
+    </div>
+
+    <div class="dropdown">
+        <a href="javascript:history.back()">Volver</a>
+        <a href="/logout">Salir</a>
+    </div>
+
+</div>
+
+</div>
+
+<div class="container">
+
+<div class="card">
+
+<h3>Datos</h3>
+
+<form method="post">
+
+<input name="nombre" value="{{user['nombre']}}" required>
+<input name="email" value="{{user['email']}}" required>
+
+<button>Guardar</button>
+
+</form>
+
+<hr>
+
+<h3>Cambiar contraseña</h3>
+
+<form method="post" action="/password">
+
+<input 
+type="password" 
+name="actual" 
+placeholder="Contraseña actual" 
+required
+>
+
+<input 
+type="password" 
+name="nueva" 
+placeholder="Nueva contraseña" 
+required
+>
+
+<input 
+type="password" 
+name="confirmar" 
+placeholder="Confirmar nueva contraseña" 
+required
+>
+
+<button>Cambiar contraseña</button>
+
+</form>
+
+</div>
+
+</div>
+
+</body>
+</html>

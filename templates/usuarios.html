@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<title>Usuarios</title>
+</head>
+
+<body>
+
+<div class="topbar">
+
+    <div>Usuarios del sistema</div>
+
+    <div class="user-menu">
+
+        <div class="user-btn">
+            {{ session['nombre'] }} ▼
+        </div>
+
+        <div class="dropdown">
+            <a href="/admin">Panel</a>
+            <a href="/perfil">Editar perfil</a>
+            <a href="/logout">Salir</a>
+        </div>
+
+    </div>
+
+</div>
+
+<div class="container">
+
+<h2>Usuarios</h2>
+
+<div class="grid">
+
+{% for u in usuarios %}
+<div class="card">
+
+    <div class="titulo">
+        {{ u['nombre'] }}
+    </div>
+
+    <div class="materia">
+        {{ u['email'] }}
+    </div>
+
+    <div class="materia">
+        Rol: {{ u['rol'] }}
+    </div>
+
+    <div class="fecha">
+        Estado: {{ u['estado'] }}
+    </div>
+
+    <br>
+
+    <div style="display:flex; gap:10px;">
+
+        {% if u['rol'] != 'admin' and u['id'] != session['user_id'] %}
+        <a href="/eliminar_usuario/{{ u['id'] }}">
+            <button style="background:#dc2626;">
+                Eliminar
+            </button>
+        </a>
+        {% else %}
+        <button disabled style="background:#374151;">
+            Protegido
+        </button>
+        {% endif %}
+
+    </div>
+
+</div>
+{% endfor %}
+
+</div>
+
+</div>
+
+</body>
+</html>
