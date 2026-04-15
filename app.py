@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, session, send_from_directory
-import sqlite3
+import psycopg2
+import psycopg2.extras
 import os
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -8,9 +9,9 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 app.secret_key = "super_secret_key"
 
-DB = "database.db"
-UPLOAD_FOLDER = "uploads"
+DATABASE_URL = "postgresql://gestor_academico_db_ln6m_user:5446xA5IUK9hWzwibZ7obDBTvugi3oir@dpg-d7fvq7471suc73a91t9g-a.oregon-postgres.render.com/gestor_academico_db_ln6m"
 
+UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
@@ -26,8 +27,11 @@ def uploads(filename):
 # DB CONNECTION
 # ======================
 def get_db():
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg2.connect(
+        DATABASE_URL,
+        sslmode="require"
+    )
+    conn.autocommit = False
     return conn
 
 
@@ -40,7 +44,7 @@ def init_db():
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS usuarios (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         nombre TEXT,
         email TEXT UNIQUE,
         password TEXT,
@@ -51,59 +55,42 @@ def init_db():
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS pdfs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         profesor_id INTEGER,
         nombre TEXT,
         archivo TEXT,
         carrera TEXT,
         materia TEXT,
         observaciones TEXT,
-        fecha TEXT
+        fecha TEXT,
+        fecha_creacion TEXT,
+        fecha_edicion TEXT,
+        creado_por TEXT,
+        editado_por TEXT
     )
     """)
-
-    # columnas nuevas
-    try:
-        cur.execute("ALTER TABLE pdfs ADD COLUMN fecha_creacion TEXT")
-    except:
-        pass
-
-    try:
-        cur.execute("ALTER TABLE pdfs ADD COLUMN fecha_edicion TEXT")
-    except:
-        pass
-
-    try:
-        cur.execute("ALTER TABLE pdfs ADD COLUMN creado_por TEXT")
-    except:
-        pass
-
-    try:
-        cur.execute("ALTER TABLE pdfs ADD COLUMN editado_por TEXT")
-    except:
-        pass
 
     conn.commit()
     conn.close()
 
+
 # ======================
-# CREAR 2 ADMINS FIJOS
+# CREAR ADMINS
 # ======================
 def crear_admins():
-
     conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    admins = conn.execute(
-        "SELECT email FROM usuarios WHERE rol='admin'"
-    ).fetchall()
+    cur.execute("SELECT email FROM usuarios WHERE rol='admin'")
+    admins = cur.fetchall()
 
     emails = [a["email"] for a in admins]
 
     if "admin@admin.com" not in emails:
-        conn.execute("""
+        cur.execute("""
         INSERT INTO usuarios (nombre,email,password,rol,estado)
-        VALUES (?,?,?,?,?)
-        """,(
+        VALUES (%s,%s,%s,%s,%s)
+        """, (
             "Administrador",
             "admin@admin.com",
             generate_password_hash("admin123"),
@@ -112,10 +99,10 @@ def crear_admins():
         ))
 
     if "jefe@admin.com" not in emails:
-        conn.execute("""
+        cur.execute("""
         INSERT INTO usuarios (nombre,email,password,rol,estado)
-        VALUES (?,?,?,?,?)
-        """,(
+        VALUES (%s,%s,%s,%s,%s)
+        """, (
             "Jefe de Carrera",
             "jefe@admin.com",
             generate_password_hash("admin123"),
@@ -126,9 +113,10 @@ def crear_admins():
     conn.commit()
     conn.close()
 
-#======================
+
 init_db()
 crear_admins()
+
 
 # ======================
 # LOGIN
@@ -138,20 +126,18 @@ def login():
 
     if request.method == "POST":
 
-        email = request.form["email"]
-        password = request.form["password"]
-
         conn = get_db()
-        user = conn.execute(
-            "SELECT * FROM usuarios WHERE email=?",
-            (email,)
-        ).fetchone()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        cur.execute("SELECT * FROM usuarios WHERE email=%s", (request.form["email"],))
+        user = cur.fetchone()
+
         conn.close()
 
         if not user:
             return render_template("login.html", error="Usuario no encontrado")
 
-        if not check_password_hash(user["password"], password):
+        if not check_password_hash(user["password"], request.form["password"]):
             return render_template("login.html", error="Contraseña incorrecta")
 
         if user["rol"] != "admin" and user["estado"] != "aprobado":
@@ -161,10 +147,7 @@ def login():
         session["nombre"] = user["nombre"]
         session["rol"] = user["rol"]
 
-        if user["rol"] == "admin":
-            return redirect("/admin")
-
-        return redirect("/dashboard")
+        return redirect("/admin" if user["rol"] == "admin" else "/dashboard")
 
     return render_template("login.html")
 
@@ -177,24 +160,23 @@ def register():
 
     if request.method == "POST":
 
-        nombre = request.form["nombre"]
-        email = request.form["email"]
-        password = generate_password_hash(request.form["password"])
-
         conn = get_db()
+        cur = conn.cursor()
 
         try:
-            conn.execute("""
+            cur.execute("""
             INSERT INTO usuarios (nombre,email,password,rol,estado)
-            VALUES (?,?,?,?,?)
-            """,(
-                nombre,
-                email,
-                password,
+            VALUES (%s,%s,%s,%s,%s)
+            """, (
+                request.form["nombre"],
+                request.form["email"],
+                generate_password_hash(request.form["password"]),
                 "profesor",
                 "pendiente"
             ))
+
             conn.commit()
+
         except:
             conn.close()
             return "Email ya registrado"
@@ -224,22 +206,18 @@ def admin():
         return redirect("/")
 
     conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    usuarios = conn.execute("""
-        SELECT * FROM usuarios
-        WHERE rol='profesor'
-        ORDER BY estado
-    """).fetchall()
+    cur.execute("SELECT * FROM usuarios WHERE rol='profesor' ORDER BY estado")
+    usuarios = cur.fetchall()
 
-    archivos = conn.execute("""
-        SELECT 
-            pdfs.*,
-            usuarios.nombre AS profesor_nombre
+    cur.execute("""
+        SELECT pdfs.*, usuarios.nombre AS profesor_nombre
         FROM pdfs
-        LEFT JOIN usuarios 
-        ON usuarios.id = pdfs.profesor_id
+        LEFT JOIN usuarios ON usuarios.id = pdfs.profesor_id
         ORDER BY pdfs.fecha DESC
-    """).fetchall()
+    """)
+    archivos = cur.fetchall()
 
     conn.close()
 
@@ -247,88 +225,6 @@ def admin():
         usuarios=usuarios,
         archivos=archivos
     )
-
-
-# ======================
-# APROBAR
-# ======================
-@app.route("/aprobar/<int:id>")
-def aprobar(id):
-
-    conn = get_db()
-    conn.execute(
-        "UPDATE usuarios SET estado='aprobado' WHERE id=?",
-        (id,)
-    )
-    conn.commit()
-    conn.close()
-
-    return redirect("/admin")
-
-
-# ======================
-# RECHAZAR
-# ======================
-@app.route("/rechazar/<int:id>")
-def rechazar(id):
-
-    conn = get_db()
-    conn.execute(
-        "UPDATE usuarios SET estado='rechazado' WHERE id=?",
-        (id,)
-    )
-    conn.commit()
-    conn.close()
-
-    return redirect("/admin")
-
-
-# ======================
-# ELIMINAR USUARIO
-# ======================
-@app.route("/eliminar/<int:id>")
-def eliminar(id):
-
-    if session.get("rol") != "admin":
-        return redirect("/")
-
-    conn = get_db()
-
-    user = conn.execute(
-        "SELECT rol FROM usuarios WHERE id=?",
-        (id,)
-    ).fetchone()
-
-    # no borrar admins
-    if user and user["rol"] == "admin":
-        conn.close()
-        return redirect("/usuarios")
-
-    # borrar pdfs del profesor
-    conn.execute(
-        "DELETE FROM pdfs WHERE profesor_id=?",
-        (id,)
-    )
-
-    # borrar usuario
-    conn.execute(
-        "DELETE FROM usuarios WHERE id=?",
-        (id,)
-    )
-
-    conn.commit()
-    conn.close()
-
-    return redirect("/usuarios")
-
-
-# ======================
-# ALIAS ELIMINAR (para HTML)
-# ======================
-@app.route("/eliminar_usuario/<int:id>")
-def eliminar_usuario(id):
-    return eliminar(id)
-
 
 # ======================
 # USUARIOS
@@ -340,17 +236,94 @@ def usuarios():
         return redirect("/")
 
     conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    usuarios = conn.execute("""
+    # ✔ AHORA MUESTRA TODOS LOS USUARIOS (no solo pendientes)
+    cur.execute("""
         SELECT * FROM usuarios
-        WHERE estado='aprobado'
-        ORDER BY nombre
-    """).fetchall()
+        ORDER BY rol, estado, nombre
+    """)
 
+    usuarios = cur.fetchall()
     conn.close()
 
     return render_template("usuarios.html", usuarios=usuarios)
 
+
+# ======================
+# APROBAR / RECHAZAR
+# ======================
+@app.route("/aprobar/<int:id>")
+def aprobar(id):
+
+    if session.get("rol") != "admin":
+        return redirect("/")
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        "UPDATE usuarios SET estado=%s WHERE id=%s",
+        ("aprobado", id)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return redirect("/admin")
+
+
+@app.route("/rechazar/<int:id>")
+def rechazar(id):
+
+    if session.get("rol") != "admin":
+        return redirect("/")
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        "UPDATE usuarios SET estado=%s WHERE id=%s",
+        ("rechazado", id)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return redirect("/admin")
+
+
+# ======================
+# ELIMINAR USUARIO
+# ======================
+@app.route("/eliminar_usuario/<int:id>")
+def eliminar_usuario(id):
+
+    if session.get("rol") != "admin":
+        return redirect("/")
+
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    # obtener usuario
+    cur.execute("SELECT rol FROM usuarios WHERE id=%s", (id,))
+    user = cur.fetchone()
+
+    # protección admin
+    if user and user["rol"] == "admin":
+        conn.close()
+        return redirect("/usuarios")
+
+    # borrar PDFs del profesor
+    cur.execute("DELETE FROM pdfs WHERE profesor_id=%s", (id,))
+
+    # borrar usuario
+    cur.execute("DELETE FROM usuarios WHERE id=%s", (id,))
+
+    conn.commit()
+    conn.close()
+
+    return redirect("/usuarios")
 
 # ======================
 # DASHBOARD
@@ -362,13 +335,12 @@ def dashboard():
         return redirect("/")
 
     conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    archivos = conn.execute("""
-        SELECT * FROM pdfs
-        WHERE profesor_id=?
-        ORDER BY fecha DESC
-    """,(session["user_id"],)).fetchall()
+    cur.execute("SELECT * FROM pdfs WHERE profesor_id=%s ORDER BY fecha DESC",
+                (session["user_id"],))
 
+    archivos = cur.fetchall()
     conn.close()
 
     return render_template("dashboard.html", archivos=archivos)
@@ -384,33 +356,26 @@ def perfil():
         return redirect("/")
 
     conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     if request.method == "POST":
-
-        nombre = request.form["nombre"]
-        email = request.form["email"]
-
-        conn.execute("""
-        UPDATE usuarios
-        SET nombre=?, email=?
-        WHERE id=?
-        """,(
-            nombre,
-            email,
+        cur.execute("""
+        UPDATE usuarios SET nombre=%s, email=%s WHERE id=%s
+        """, (
+            request.form["nombre"],
+            request.form["email"],
             session["user_id"]
         ))
         conn.commit()
+        session["nombre"] = request.form["nombre"]
 
-        session["nombre"] = nombre
-
-    user = conn.execute(
-        "SELECT * FROM usuarios WHERE id=?",
-        (session["user_id"],)
-    ).fetchone()
+    cur.execute("SELECT * FROM usuarios WHERE id=%s", (session["user_id"],))
+    user = cur.fetchone()
 
     conn.close()
 
     return render_template("perfil.html", user=user)
+
 
 # ======================
 # PASSWORD
@@ -418,29 +383,19 @@ def perfil():
 @app.route("/password", methods=["POST"])
 def password():
 
-    actual = request.form["actual"]
-    nueva = request.form["nueva"]
-    confirmar = request.form["confirmar"]
-
-    if nueva != confirmar:
-        return redirect("/perfil")
-
     conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    user = conn.execute(
-        "SELECT password FROM usuarios WHERE id=?",
-        (session["user_id"],)
-    ).fetchone()
+    cur.execute("SELECT password FROM usuarios WHERE id=%s", (session["user_id"],))
+    user = cur.fetchone()
 
-    if not check_password_hash(user["password"], actual):
-        conn.close()
+    if not check_password_hash(user["password"], request.form["actual"]):
         return redirect("/perfil")
 
-    conn.execute("""
-    UPDATE usuarios SET password=?
-    WHERE id=?
-    """,(
-        generate_password_hash(nueva),
+    cur.execute("""
+    UPDATE usuarios SET password=%s WHERE id=%s
+    """, (
+        generate_password_hash(request.form["nueva"]),
         session["user_id"]
     ))
 
@@ -466,20 +421,16 @@ def subir_pdf():
     fecha = datetime.now().strftime("%d/%m/%Y %H:%M")
 
     conn = get_db()
-    conn.execute("""
+    cur = conn.cursor()
+
+    cur.execute("""
     INSERT INTO pdfs (
-        profesor_id,
-        nombre,
-        archivo,
-        carrera,
-        materia,
-        observaciones,
-        fecha,
-        fecha_creacion,
-        creado_por
+        profesor_id,nombre,archivo,
+        carrera,materia,observaciones,
+        fecha,fecha_creacion,creado_por
     )
-    VALUES (?,?,?,?,?,?,?,?,?)
-    """,(
+    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (
         session["user_id"],
         original,
         filename,
@@ -504,18 +455,18 @@ def subir_pdf():
 def eliminar_pdf_admin(id):
 
     conn = get_db()
+    cur = conn.cursor()
 
-    pdf = conn.execute(
-        "SELECT archivo FROM pdfs WHERE id=?",
-        (id,)
-    ).fetchone()
+    cur.execute("SELECT archivo FROM pdfs WHERE id=%s", (id,))
+    pdf = cur.fetchone()
 
-    if pdf:
-        path = os.path.join(UPLOAD_FOLDER, pdf["archivo"])
+    if pdf and pdf[0]:
+        path = os.path.join(UPLOAD_FOLDER, pdf[0])
         if os.path.exists(path):
             os.remove(path)
 
-    conn.execute("DELETE FROM pdfs WHERE id=?", (id,))
+    cur.execute("DELETE FROM pdfs WHERE id=%s", (id,))
+
     conn.commit()
     conn.close()
 
@@ -529,11 +480,10 @@ def eliminar_pdf_admin(id):
 def editar_pdf(id):
 
     conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    pdf = conn.execute(
-        "SELECT * FROM pdfs WHERE id=?",
-        (id,)
-    ).fetchone()
+    cur.execute("SELECT * FROM pdfs WHERE id=%s", (id,))
+    pdf = cur.fetchone()
 
     if request.method == "POST":
 
@@ -541,24 +491,19 @@ def editar_pdf(id):
 
         file = request.files.get("pdf")
 
-        if file and file.filename != "":
+        if file and file.filename:
             original = secure_filename(file.filename)
             archivo = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{original}"
             file.save(os.path.join(UPLOAD_FOLDER, archivo))
 
         fecha = datetime.now().strftime("%d/%m/%Y %H:%M")
 
-        conn.execute("""
-        UPDATE pdfs
-        SET carrera=?,
-            materia=?,
-            observaciones=?,
-            archivo=?,
-            fecha=?,
-            fecha_edicion=?,
-            editado_por=?
-        WHERE id=?
-        """,(
+        cur.execute("""
+        UPDATE pdfs SET
+        carrera=%s,materia=%s,observaciones=%s,
+        archivo=%s,fecha=%s,fecha_edicion=%s,editado_por=%s
+        WHERE id=%s
+        """, (
             request.form["carrera"],
             request.form["materia"],
             request.form["observaciones"],
@@ -572,10 +517,7 @@ def editar_pdf(id):
         conn.commit()
         conn.close()
 
-        if session["rol"] == "admin":
-            return redirect("/admin")
-
-        return redirect("/dashboard")
+        return redirect("/admin" if session["rol"] == "admin" else "/dashboard")
 
     conn.close()
     return render_template("editar_pdf.html", pdf=pdf)
