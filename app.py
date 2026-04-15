@@ -478,19 +478,6 @@ def editar_pdf(id):
     conn.close()
     return render_template("editar_pdf.html", pdf=pdf)
 
-#=======temporal
-
-    @app.route("/borrar_admin")
-def borrar_admin():
-    conn = get_db()
-    cur = conn.cursor()
-
-    cur.execute("DELETE FROM usuarios WHERE email=%s", ("admin@admin.com",))
-
-    conn.commit()
-    conn.close()
-    return "borrado"
-
 
 if __name__ == "__main__":
     app.run(debug=True)
