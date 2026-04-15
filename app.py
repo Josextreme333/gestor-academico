@@ -75,50 +75,6 @@ def init_db():
 
 
 # ======================
-# CREAR ADMINS
-# ======================
-def crear_admins():
-    conn = get_db()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
-    cur.execute("SELECT email FROM usuarios WHERE rol='admin'")
-    admins = cur.fetchall()
-
-    emails = [a["email"] for a in admins]
-
-    if "admin@admin.com" not in emails:
-        cur.execute("""
-        INSERT INTO usuarios (nombre,email,password,rol,estado)
-        VALUES (%s,%s,%s,%s,%s)
-        """, (
-            "Administrador",
-            "admin@admin.com",
-            generate_password_hash("admin123"),
-            "admin",
-            "aprobado"
-        ))
-
-    if "jefe@admin.com" not in emails:
-        cur.execute("""
-        INSERT INTO usuarios (nombre,email,password,rol,estado)
-        VALUES (%s,%s,%s,%s,%s)
-        """, (
-            "Jefe de Carrera",
-            "jefe@admin.com",
-            generate_password_hash("admin123"),
-            "admin",
-            "aprobado"
-        ))
-
-    conn.commit()
-    conn.close()
-
-
-init_db()
-crear_admins()
-
-
-# ======================
 # LOGIN
 # ======================
 @app.route("/", methods=["GET","POST"])
@@ -521,6 +477,19 @@ def editar_pdf(id):
 
     conn.close()
     return render_template("editar_pdf.html", pdf=pdf)
+
+#=======temporal
+
+    @app.route("/borrar_admin")
+def borrar_admin():
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM usuarios WHERE email=%s", ("admin@admin.com",))
+
+    conn.commit()
+    conn.close()
+    return "borrado"
 
 
 if __name__ == "__main__":
